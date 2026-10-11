@@ -1612,6 +1612,9 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
   if (typeof global.autoStickerMode === 'undefined') {
     global.autoStickerMode = 'default';
   }
+  if (typeof global.autoRevealEnabled === 'undefined') {
+    global.autoRevealEnabled = false;
+  }
   try {
     var r;
     const from = info.key.remoteJid;
@@ -24068,6 +24071,30 @@ ${prefix}togglecmdvip premium_ia off`);
           }
         } catch (e) {
           console.error(e);
+          await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
+        }
+        break;
+
+      case 'autorev':
+      case 'autoreveal':
+        try {
+          if (!isOwner) return reply("🚫 Apenas o dono do bot pode usar este comando!");
+          const arg = q?.toLowerCase().trim();
+          if (!arg) {
+            const status = global.autoRevealEnabled ? '*ATIVADO*' : '*DESATIVADO*';
+            return reply(`ℹ️ Status do Auto-Revelar: ${status}\n\nUse: ${prefix}autorev on | off`);
+          }
+          if (arg === 'on' || arg === 'ligar' || arg === 'ativar') {
+            global.autoRevealEnabled = true;
+            return reply('✅ *Auto-Revelar ativado!* Mídias de visualização única serão enviadas para seu número privado.');
+          }
+          if (arg === 'off' || arg === 'desligar' || arg === 'desativar') {
+            global.autoRevealEnabled = false;
+            return reply('❌ *Auto-Revelar desativado.*');
+          }
+          return reply(`Uso: ${prefix}autorev on | off`);
+        } catch (e) {
+          console.error('[AUTOREV COMMAND] Erro:', e);
           await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
         }
         break;

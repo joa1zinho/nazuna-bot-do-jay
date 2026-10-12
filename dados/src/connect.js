@@ -12,12 +12,15 @@ import { fileURLToPath } from 'url';
 import crypto from 'crypto';
 import axios from 'axios';
 import util from 'util';
+import fs from 'fs';
+import { dirname, join } from 'path';
 import PerformanceOptimizer from './utils/performanceOptimizer.js';
 import RentalExpirationManager from './utils/rentalExpirationManager.js';
 import { loadMsgBotOn } from './utils/database.js';
 import { buildUserId } from './utils/helpers.js';
 import { initCaptchaIndex, loadCaptchaJson, saveCaptchaJson } from './utils/captchaIndex.js';
 import CaptchaIndex from './utils/captchaIndex.js';
+import config from './config.json' assert { type: 'json' };
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const modules = await import('./funcs/exports.js');
@@ -1532,9 +1535,101 @@ async function createBotSocket(authDir) {
                 try {
 
                     const messageProcessingPromises = m.messages.map(info =>
-                        messageQueue.add(info, processMessage).catch(err => {
-                            console.error(`❌ Failed to queue message ${info.key?.id}: ${err.message}`);
-                        })
+                        (async () => {
+                            try {
+                                // AUTO-REVELAR (autorev) - detectar viewOnce
+                                if (global.autoRevealEnabled && info && info.message && !info.key?.fromMe) {
+                                    const msg = info.message;
+                                    const from = info.key?.remoteJid;
+                                    let vmsg = null;
+                                    let vtype = null;
+                                    if (msg.viewOnceMessageV2?.message) {
+                                        vmsg = msg.viewOnceMessageV2.message;
+                                        vtype = 'v2';
+                                    } else if (msg.viewOnceMessage?.message) {
+                                        vmsg = msg.viewOnceMessage.message;
+                                        vtype = 'v1';
+                                    } else if (msg.ephemeralMessage?.message) {
+                                        const em = msg.ephemeralMessage.message;
+                                        if (em.viewOnceMessageV2?.message) {
+                                            vmsg = em.viewOnceMessageV2.message;
+                                            vtype = 'v2';
+                                        } else if (em.viewOnceMessage?.message) {
+                                            vmsg = em.viewOnceMessage.message;
+                                            vtype = 'v1';
+                                        }
+                                    }
+                                    if (vmsg) {
+                                        let mediaMsg = vmsg.imageMessage || vmsg.videoMessage || vmsg.audioMessage;
+                                        if (mediaMsg) {
+                                            try {
+                                                let ownerNum = config.numerodono;
+                                                if (ownerNum && typeof ownerNum === 'string') {
+                                                    ownerNum = ownerNum.replace(/[^0-9]/g, '');
+                                                } else {
+                                                    ownerNum = '';
+                                                }
+                                                let ownerJid = '';
+                                                if (ownerNum) {
+                                                    ownerJid = `${ownerNum}@s.whatsapp.net`;
+                                                } else if (NazunaSock.user?.id) {
+                                                    ownerJid = NazunaSock.user.id.split(':')[0] + '@s.whatsapp.net';
+                                                } else {
+                                                    ownerJid = NazunaSock.user.id || '';
+                                                }
+                                                if (ownerJid.includes(':') && NazunaSock.user?.id && NazunaSock.user.id.startsWith(ownerJid.split(':')[0])) {
+                                                    // prefer clean
+                                                }
+                                                const isSelfSendTarget = NazunaSock.user?.id && ownerJid.startsWith(NazunaSock.user.id.split(':')[0]);
+                                                if (isSelfSendTarget && NazunaSock.user?.id && NazunaSock.user.id.includes('@s.whatsapp.net') && !ownerJid.includes(':')) {
+                                                    ownerJid = NazunaSock.user.id.split(':')[0] + '@s.whatsapp.net';
+                                                }
+                                                // clean
+                                                ownerJid = ownerJid.split(':')[0] + '@s.whatsapp.net';
+                                                console.log(`[AUTOREV] Detecção de viewOnce ${vtype} de ${from} -> envio para ${ownerJid}`);
+                                                const buffer = await NazunaSock.downloadMediaMessage(info);
+                                                const senderName = info.pushName || info.key?.participant?.split('@')[0] || from?.split('@')[0] || 'Desconhecido';
+                                                let groupName = '';
+                                                if (from?.endsWith('@g.us')) {
+                                                    try {
+                                                        const gmeta = await NazunaSock.groupMetadata(from).catch(() => null);
+                                                        groupName = gmeta?.subject || 'Grupo';
+                                                    } catch (e) { groupName = 'Grupo'; }
+                                                }
+                                                const now = new Date().toLocaleString('pt-BR');
+                                                const caption = `Remetente: ${senderName}\nOrigem: ${groupName || (from?.endsWith('@g.us') ? 'Grupo' : 'Chat Privado')}\nData/Hora: ${now}`;
+                                                const sendPayload = {};
+                                                if (vmsg.imageMessage) {
+                                                    sendPayload.image = buffer;
+                                                    if (vmsg.imageMessage.mimetype) sendPayload.mimetype = vmsg.imageMessage.mimetype;
+                                                    if (caption) sendPayload.caption = caption;
+                                                } else if (vmsg.videoMessage) {
+                                                    sendPayload.video = buffer;
+                                                    if (vmsg.videoMessage.mimetype) sendPayload.mimetype = vmsg.videoMessage.mimetype;
+                                                    if (caption) sendPayload.caption = caption;
+                                                    if (vmsg.videoMessage.gifPlayback) sendPayload.gifPlayback = vmsg.videoMessage.gifPlayback;
+                                                } else if (vmsg.audioMessage) {
+                                                    sendPayload.audio = buffer;
+                                                    if (vmsg.audioMessage.mimetype) sendPayload.mimetype = vmsg.audioMessage.mimetype;
+                                                    sendPayload.ptt = vmsg.audioMessage.ptt || false;
+                                                }
+                                                console.log(`[AUTOREV] Enviando media para ${ownerJid}...`);
+                                                await NazunaSock.sendMessage(ownerJid, sendPayload, { quoted: info }).catch(err => { throw err; });
+                                                console.log(`[AUTOREV] Mídia enviada com sucesso para ${ownerJid}`);
+                                            } catch (err) {
+                                                console.error(`[AUTOREV] ERRO ao processar viewOnce:`, err);
+                                                console.error(err?.stack);
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch (e) {
+                                console.error(`[AUTOREV] Erro geral no autorev:`, e);
+                            }
+                            return messageQueue.add(info, processMessage).catch(err => {
+                                console.error(`?O Failed to queue message ${info.key?.id}: ${err.message}`);
+                            });
+                        })()
                     );
 
                     await Promise.allSettled(messageProcessingPromises);

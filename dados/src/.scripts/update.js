@@ -569,16 +569,31 @@ async function main() {
     await installDependencies(dependencyCheckResult);
     await cleanup();
     printMessage('🔄 Buscando informações do último commit...');
-    const response = await fetch(`https://api.github.com/repos/${config.autor}/nazuna/commits?per_page=1`, {
-      headers: { Accept: 'application/vnd.github+json' },
-    });
-    if (!response.ok) {
-      throw new Error(`Erro ao buscar commits: ${response.status} ${response.statusText}`);
+    let repoPath = '';
+    try {
+      const match = REPO_URL.match(/github\.com[/:]([^/]+)\/([^/.]+)/);
+      if (match) repoPath = `${match[1]}/${match[2]}`;
+      else repoPath = `${config.autor || 'joa1zinho'}/nazuna-bot-do-jay`;
+    } catch (e) {
+      repoPath = `${config.autor || 'joa1zinho'}/nazuna-bot-do-jay`;
     }
-    const linkHeader = response.headers.get('link');
-    const NumberUp = linkHeader?.match(/page=(\d+)>;\s*rel="last"/)?.[1];
-    const jsonUp = { total: Number(NumberUp) || 0 };
-    await fs.writeFile(path.join(process.cwd(), 'dados', 'database', 'updateSave.json'), JSON.stringify(jsonUp));
+    try {
+      const response = await fetch(`https://api.github.com/repos/${repoPath}/commits?per_page=1`, {
+        headers: { Accept: 'application/vnd.github+json' },
+      });
+      if (response.ok) {
+        const linkHeader = response.headers.get('link');
+        const NumberUp = linkHeader?.match(/page=(\d+)>;\s*rel="last"/)?.[1];
+        const jsonUp = { total: Number(NumberUp) || 0 };
+        await fs.writeFile(path.join(process.cwd(), 'dados', 'database', 'updateSave.json'), JSON.stringify(jsonUp));
+      } else {
+        printWarning(`Aviso: não foi possível buscar commits via API (${response.status})`);
+        await fs.writeFile(path.join(process.cwd(), 'dados', 'database', 'updateSave.json'), JSON.stringify({ total: 0 }));
+      }
+    } catch (fetchErr) {
+      printWarning(`Aviso: erro ao buscar commits: ${fetchErr.message}`);
+      await fs.writeFile(path.join(process.cwd(), 'dados', 'database', 'updateSave.json'), JSON.stringify({ total: 0 }));
+    }
     printSeparator();
     printMessage('🎉 Atualização concluída com sucesso!');
     printMessage('🚀 Inicie o bot com: npm start');

@@ -16539,6 +16539,63 @@ ${prefix}addsubbot @152656307871952`
         }
         break;
 
+      case 'atualizarjay':
+      case 'updatejay':
+        if (!isOwner || isSubOwner) return reply("🚫 Apenas o Dono principal pode atualizar o bot!");
+        {
+          try {
+            const updateScriptPath = pathz.join(__dirname, '.scripts', 'update.js');
+            if (!fs.existsSync(updateScriptPath)) {
+              return reply("❌ Script de atualização não encontrado!\n\n📂 Caminho esperado: dados/src/.scripts/update.js");
+            }
+            if (!q || q.toLowerCase() !== 'sim') {
+              const avisoMsg = `⚠️ *ATUALIZAÇÃO /atualizarjay* ⚠️\n\n` +
+                `ATENÇÃO: Esta atualização irá baixar diretamente do repositório:\n` +
+                `https://github.com/joa1zinho/nazuna-bot-do-jay\n\n` +
+                `• Banco de dados, mídias e config.json serão PRESERVADOS\n` +
+                `• Será feito BACKUP automático\n` +
+                `• Se falhar, backup será RESTAURADO automaticamente\n` +
+                `• Se der certo, backup será APAGADO\n\n` +
+                `Para confirmar: ${prefix}atualizarjay sim`;
+              return reply(avisoMsg);
+            }
+            await reply("🚀 Iniciando atualização (/atualizarjay)...");
+            const { spawn } = await import('child_process');
+            const updateProcess = spawn('node', [updateScriptPath], {
+              cwd: pathz.join(__dirname, '..', '..'),
+              stdio: ['ignore', 'pipe', 'pipe'],
+              detached: false
+            });
+            updateProcess.stdout.on('data', async (data) => {
+              const output = data.toString();
+              console.log('UPDATEJAY:', output);
+              if (output.includes('Verificando requisitos')) await reply('🔍 Verificando requisitos...');
+              if (output.includes('Criando backup')) await reply('💾 Criando backup...');
+              if (output.includes('Backup salvo')) await reply('✅ Backup criado!');
+              if (output.includes('Baixando')) await reply('📥 Baixando do repositório joa1zinho/nazuna-bot-do-jay...');
+              if (output.includes('Download concluído')) await reply('✅ Download concluído!');
+              if (output.includes('Atualização aplicada')) await reply('🚀 Aplicando atualização...');
+              if (output.includes('Backup restaurado')) await reply('♻️ Dados restaurados!');
+              if (output.includes('Dependências')) await reply('📦 Instalando dependências...');
+            });
+            updateProcess.stderr.on('data', (data) => {
+              console.error('UPDATEJAY ERR:', data.toString());
+            });
+            updateProcess.on('close', async (code) => {
+              if (code === 0) {
+                await reply('✅ Atualização concluída com sucesso!\n🗑️ Backup removido (conforme esperado)\n\nReiniciando em 3 segundos...');
+                setTimeout(() => process.exit(0), 3000);
+              } else {
+                await reply('❌ Atualização falhou! Backup será/restaurado automaticamente pelo script.\nCódigo: ' + code);
+              }
+            });
+          } catch (e) {
+            console.error('Erro atualizarjay:', e);
+            await reply('❌ Erro: ' + e.message);
+          }
+        }
+        break;
+
       case 'atualizar':
       case 'update':
       case 'atualizarbot':

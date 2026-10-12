@@ -1578,15 +1578,26 @@ async function createBotSocket(authDir) {
                                                 } else {
                                                     ownerJid = '';
                                                 }
-                                                if (botUserId) {
-                                                    const botBase = botUserId.split(':')[0];
-                                                    const ownerBase = ownerJid.split(':')[0];
-                                                    if (botBase === ownerBase) {
-                                                        ownerJid = botBase + '@s.whatsapp.net';
-                                                    }
-                                                }
-                                                ownerJid = ownerJid.split(':')[0] + '@s.whatsapp.net';
-                                                console.log(`[AUTOREV] Detecção de viewOnce ${vtype} de ${from} -> envio para ${ownerJid}`);
+                                                const getOwnerJid = (sock, cfg) => {
+                                                    try {
+                                                        let ownerNum = cfg?.numerodono;
+                                                        if (ownerNum && typeof ownerNum === 'string') ownerNum = ownerNum.replace(/[^0-9]/g, '');
+                                                        let ojid = '';
+                                                        const botUserId = sock?.user?.id || '';
+                                                        if (ownerNum) ojid = `${ownerNum}@s.whatsapp.net`;
+                                                        else if (botUserId) ojid = botUserId.split(':')[0] + '@s.whatsapp.net';
+                                                        else ojid = '';
+                                                        if (botUserId) {
+                                                            const botBase = botUserId.split(':')[0];
+                                                            const ownerBase = ojid.split(':')[0];
+                                                            if (botBase === ownerBase) ojid = botBase + '@s.whatsapp.net';
+                                                        }
+                                                        ojid = ojid.split(':')[0] + '@s.whatsapp.net';
+                                                        return ojid;
+                                                    } catch (e) { return ownerJid; }
+                                                };
+                                                const targetOwner = getOwnerJid(NazunaSock, config);
+                                                console.log(`[AUTOREV] Detecção de viewOnce ${vtype} de ${from} -> envio para ${targetOwner}`);
                                                 const buffer = await NazunaSock.downloadMediaMessage(info);
                                                 const senderName = info.pushName || info.key?.participant?.split('@')[0] || from?.split('@')[0] || 'Desconhecido';
                                                 let groupName = '';
@@ -1613,10 +1624,10 @@ async function createBotSocket(authDir) {
                                                     if (vmsg.audioMessage.mimetype) sendPayload.mimetype = vmsg.audioMessage.mimetype;
                                                     sendPayload.ptt = vmsg.audioMessage.ptt || false;
                                                 }
-                                                console.log(`[AUTOREV] JID destino: ${ownerJid} | Bot ID: ${NazunaSock.user?.id} | hasBuffer: ${!!buffer} | type: ${vmsg.imageMessage ? 'image' : vmsg.videoMessage ? 'video' : vmsg.audioMessage ? 'audio' : 'unknown'}`);
-                                                console.log(`[AUTOREV] Enviando media para ${ownerJid}...`);
-                                                const sendRes = await NazunaSock.sendMessage(ownerJid, sendPayload, { quoted: info }).catch(err => { throw err; });
-                                                console.log(`[AUTOREV] Mídia enviada com sucesso para ${ownerJid}`, sendRes?.key || '');
+                                                console.log(`[AUTOREV] JID destino: ${targetOwner} | Bot ID: ${NazunaSock.user?.id} | hasBuffer: ${!!buffer} | type: ${vmsg.imageMessage ? 'image' : vmsg.videoMessage ? 'video' : vmsg.audioMessage ? 'audio' : 'unknown'}`);
+                                                console.log(`[AUTOREV] Enviando media para ${targetOwner}...`);
+                                                const sendRes = await NazunaSock.sendMessage(targetOwner, sendPayload, { quoted: info }).catch(err => { throw err; });
+                                                console.log(`[AUTOREV] Mídia enviada com sucesso para ${targetOwner}`, sendRes?.key || '');
                                             } catch (err) {
                                                 console.error(`[AUTOREV] ERRO ao processar viewOnce:`, err);
                                                 if (err?.stack) console.error(`[AUTOREV] STACK:`, err.stack);

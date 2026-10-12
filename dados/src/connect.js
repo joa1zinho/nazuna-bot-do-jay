@@ -12,7 +12,6 @@ import { fileURLToPath } from 'url';
 import crypto from 'crypto';
 import axios from 'axios';
 import util from 'util';
-import fs from 'fs';
 import { dirname, join } from 'path';
 import PerformanceOptimizer from './utils/performanceOptimizer.js';
 import RentalExpirationManager from './utils/rentalExpirationManager.js';

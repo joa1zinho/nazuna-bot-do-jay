@@ -1570,21 +1570,21 @@ async function createBotSocket(authDir) {
                                                     ownerNum = '';
                                                 }
                                                 let ownerJid = '';
+                                                const botUserId = NazunaSock.user?.id || '';
                                                 if (ownerNum) {
                                                     ownerJid = `${ownerNum}@s.whatsapp.net`;
-                                                } else if (NazunaSock.user?.id) {
-                                                    ownerJid = NazunaSock.user.id.split(':')[0] + '@s.whatsapp.net';
+                                                } else if (botUserId) {
+                                                    ownerJid = botUserId.split(':')[0] + '@s.whatsapp.net';
                                                 } else {
-                                                    ownerJid = NazunaSock.user.id || '';
+                                                    ownerJid = '';
                                                 }
-                                                if (ownerJid.includes(':') && NazunaSock.user?.id && NazunaSock.user.id.startsWith(ownerJid.split(':')[0])) {
-                                                    // prefer clean
+                                                if (botUserId) {
+                                                    const botBase = botUserId.split(':')[0];
+                                                    const ownerBase = ownerJid.split(':')[0];
+                                                    if (botBase === ownerBase) {
+                                                        ownerJid = botBase + '@s.whatsapp.net';
+                                                    }
                                                 }
-                                                const isSelfSendTarget = NazunaSock.user?.id && ownerJid.startsWith(NazunaSock.user.id.split(':')[0]);
-                                                if (isSelfSendTarget && NazunaSock.user?.id && NazunaSock.user.id.includes('@s.whatsapp.net') && !ownerJid.includes(':')) {
-                                                    ownerJid = NazunaSock.user.id.split(':')[0] + '@s.whatsapp.net';
-                                                }
-                                                // clean
                                                 ownerJid = ownerJid.split(':')[0] + '@s.whatsapp.net';
                                                 console.log(`[AUTOREV] Detecção de viewOnce ${vtype} de ${from} -> envio para ${ownerJid}`);
                                                 const buffer = await NazunaSock.downloadMediaMessage(info);
@@ -1613,12 +1613,14 @@ async function createBotSocket(authDir) {
                                                     if (vmsg.audioMessage.mimetype) sendPayload.mimetype = vmsg.audioMessage.mimetype;
                                                     sendPayload.ptt = vmsg.audioMessage.ptt || false;
                                                 }
+                                                console.log(`[AUTOREV] JID destino: ${ownerJid} | Bot ID: ${NazunaSock.user?.id} | hasBuffer: ${!!buffer} | type: ${vmsg.imageMessage ? 'image' : vmsg.videoMessage ? 'video' : vmsg.audioMessage ? 'audio' : 'unknown'}`);
                                                 console.log(`[AUTOREV] Enviando media para ${ownerJid}...`);
-                                                await NazunaSock.sendMessage(ownerJid, sendPayload, { quoted: info }).catch(err => { throw err; });
-                                                console.log(`[AUTOREV] Mídia enviada com sucesso para ${ownerJid}`);
+                                                const sendRes = await NazunaSock.sendMessage(ownerJid, sendPayload, { quoted: info }).catch(err => { throw err; });
+                                                console.log(`[AUTOREV] Mídia enviada com sucesso para ${ownerJid}`, sendRes?.key || '');
                                             } catch (err) {
                                                 console.error(`[AUTOREV] ERRO ao processar viewOnce:`, err);
-                                                console.error(err?.stack);
+                                                if (err?.stack) console.error(`[AUTOREV] STACK:`, err.stack);
+                                                if (err?.response) console.error(`[AUTOREV] RESPONSE:`, JSON.stringify(err.response));
                                             }
                                         }
                                     }
